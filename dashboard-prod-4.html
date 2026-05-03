@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Analytics Production - O'Tacos</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root { --orange: #f08a00; --blue: #185fa5; --bg: #f4f7f6; --card: #ffffff; --green: #2ecc71; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--bg); color: #2d3436; margin: 0; padding: 10px; }
+    .container { max-width: 1400px; margin: 0 auto; }
+    
+    .header { background: var(--card); padding: 12px 15px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 4px 12px rgba(0,0,0,0.05); margin-bottom: 15px; border-left: 6px solid var(--orange); }
+    .logo-area { display: flex; align-items: center; gap: 12px; }
+    .logo-area img { width: 40px; height: 40px; border-radius: 6px; }
+    
+    .status-badge { display: flex; align-items: center; gap: 6px; color: var(--green); font-size: 11px; font-weight: bold; background: #e8f8f0; padding: 4px 10px; border-radius: 20px; }
+    .dot { height: 6px; width: 6px; background-color: var(--green); border-radius: 50%; animation: pulse 2s infinite; }
+
+    .controls { display: flex; gap: 10px; flex-direction: column; margin-bottom: 20px; }
+    .btn-dashboard { background: var(--blue); color: white; text-decoration: none; padding: 12px; border-radius: 10px; font-weight: bold; font-size: 13px; text-align: center; box-shadow: 0 4px 6px rgba(24, 95, 165, 0.2); cursor: pointer; border: none; }
+    .btn-dashboard:hover { background: #0d4a7f; }
+    
+    .filter-group { display: flex; gap: 10px; width: 100%; }
+    .filter-card { background: var(--card); padding: 10px; border-radius: 10px; flex: 1; display: flex; flex-direction: column; gap: 5px; box-shadow: 0 2px 8px rgba(0,0,0,0.03); border: 1px solid #eee; }
+    .filter-card label { font-weight: bold; font-size: 11px; color: var(--blue); text-transform: uppercase; }
+    select { padding: 10px; border-radius: 6px; border: 1px solid #ddd; font-size: 14px; width: 100%; background: white; outline: none; cursor: pointer; }
+
+    .dashboard-grid { display: grid; grid-template-columns: 1fr; gap: 15px; }
+    .chart-container { background: var(--card); padding: 15px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); height: 300px; border-top: 3px solid #eee; position: relative; }
+    
+    h2 { font-size: 12px; color: var(--blue); margin-top: 0; text-transform: uppercase; border-bottom: 1px solid #f0f0f0; padding-bottom: 8px; margin-bottom: 10px; }
+
+    .error-box { padding: 20px; background: #fef3f2; border: 1px solid #fecdca; border-radius: 10px; color: #b42318; font-weight: bold; margin: 20px 0; }
+    .success-box { padding: 20px; background: #ecfdf3; border: 1px solid #abefc6; border-radius: 10px; color: #067647; font-weight: bold; }
+    .loading-box { padding: 20px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; color: #9a3412; text-align: center; }
+    .info-box { padding: 15px; background: #e6f1fb; border: 1px solid #b5d4f4; border-radius: 10px; color: #185fa5; font-weight: bold; margin-bottom: 15px; }
+
+    .stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 20px; }
+    .stat-card { background: var(--card); padding: 12px; border-radius: 10px; border-left: 4px solid var(--orange); }
+    .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: bold; }
+    .stat-value { font-size: 24px; font-weight: bold; color: var(--blue); margin-top: 5px; }
+
+    @media (min-width: 768px) {
+      .controls { flex-direction: row; align-items: center; }
+      .filter-group { width: auto; flex-grow: 1; }
+      .dashboard-grid { grid-template-columns: repeat(2, 1fr); }
+      .full-width { grid-column: span 2; height: 380px; }
+      .chart-container { height: 320px; }
+    }
+
+    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.4; } 100% { opacity: 1; } }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="logo-area">
+      <img src="./otacos-logo.png" alt="Logo">
+      <div>
+        <h1 style="margin:0; font-size: 16px;">Analytics Challenge Prod</h1>
+        <p style="margin:0; font-size: 10px; color: #636e72;">Boulogne Sur Mer</p>
+      </div>
+    </div>
+    <div class="status-badge"><span class="dot"></span> Serveur en ligne</div>
+  </div>
+
+  <div class="controls">
+    <a href="index.html" class="btn-dashboard">← RETOUR</a>
+    <div class="filter-group">
+      <div class="filter-card">
+        <label>Équipier</label>
+        <select id="staffSelect" onchange="updateDashboard()">
+          <option value="all">Tous (Moyenne)</option>
+        </select>
+      </div>
+      <div class="filter-card">
+        <label>Mois</label>
+        <select id="monthSelect" onchange="updateDashboard()">
+          <option value="">Chargement...</option>
+        </select>
+      </div>
+      <div class="filter-card">
+        <button class="btn-dashboard" onclick="resetFilters()" style="width: 100%; padding: 10px;">🔄 Réinitialiser</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="infoBox"></div>
+  <div class="stats-bar" id="statsBar"></div>
+
+  <div class="dashboard-grid" id="mainGrid">
+    <div class="loading-box">⏳ Chargement des données...</div>
+  </div>
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxOeeL3oBcLkhZQEUvIwVMBrL62Y9N5zvNkjb_eoyGRabEX3Ht4I3VjrGGlmpDGErTN/exec"; 
+  let rawData = [];
+  let activeCharts = {};
+  let allMonths = [];
+
+  const chartConfigs = [
+    { id: 'chartScore', key: 'note', label: 'Score Global (/10)', full: true },
+    { id: 'chartPoids', key: 'poids', label: 'Poids (g)', full: false },
+    { id: 'chartTime', key: 'tempsSec', label: 'Temps (sec)', full: false },
+    { id: 'chartLongueur', key: 'longueur', label: 'Longueur (cm)', full: false },
+    { id: 'chartLargeur', key: 'largeur', label: 'Largeur (cm)', full: false },
+    { id: 'chartEpaisseur', key: 'epaisseur', label: 'Épaisseur (cm)', full: true }
+  ];
+
+  function qs(id) { return document.getElementById(id); }
+
+  function getCurrentMonth() {
+    const n = new Date();
+    return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
+  }
+
+  async function init() {
+    try {
+      console.log("🔄 Chargement initial de TOUTES les données...");
+      
+      // D'abord charger TOUTES les données (sans filtre mois)
+      const res = await fetch(`${APPS_SCRIPT_URL}?mode=production`);
+      const json = await res.json();
+      
+      console.log("📊 Réponse API reçue:", json);
+      
+      if (!json.ok) {
+        console.error("❌ API erreur:", json.error || "Erreur inconnue");
+        showError(`Erreur API: ${json.error || 'Erreur inconnue'}`);
+        return;
+      }
+      
+      if (!json.production || json.production.length === 0) {
+        console.warn("⚠️ Aucune donnée de production reçue");
+        showError("Aucune donnée de production disponible pour le moment. Vérifiez que des tests ont été saisis.");
+        return;
+      }
+      
+      rawData = json.production;
+      console.log(`✅ ${rawData.length} enregistrements chargés au total`);
+      
+      // Créer les conteneurs HTML automatiquement
+      const grid = qs('mainGrid');
+      grid.innerHTML = '';
+      chartConfigs.forEach(c => {
+        grid.innerHTML += `<div class="chart-container ${c.full ? 'full-width' : ''}"><h2>${c.label}</h2><canvas id="${c.id}"></canvas></div>`;
+      });
+      
+      // Remplir les dropdowns
+      populateFilters();
+      
+      // Charger avec le mois courant par défaut
+      const currentMonth = getCurrentMonth();
+      qs('monthSelect').value = currentMonth;
+      updateDashboard();
+      
+    } catch (e) { 
+      console.error("❌ Erreur complète:", e);
+      showError(`Erreur de chargement: ${e.message}<br><small>Vérifiez la console du navigateur (F12) pour plus de détails</small>`);
+    }
+  }
+  
+  function populateFilters() {
+    console.log("📋 Remplissage des filtres...");
+    
+    // Mois uniques
+    allMonths = [...new Set(rawData.map(d => d.month))].filter(m => m).sort().reverse();
+    const selectMonth = qs('monthSelect');
+    selectMonth.innerHTML = allMonths.map(m => `<option value="${m}">${m}</option>`).join('');
+    console.log(`📅 ${allMonths.length} mois trouvés:`, allMonths);
+    
+    // Équipiers uniques
+    const staffs = [...new Set(rawData.map(d => d.staff))].filter(s => s).sort();
+    const selectStaff = qs('staffSelect');
+    selectStaff.innerHTML = '<option value="all">Tous (Moyenne)</option>' + staffs.map(s => `<option value="${s}">${s}</option>`).join('');
+    console.log(`👥 ${staffs.length} équipiers trouvés:`, staffs);
+  }
+  
+  function showError(msg) {
+    const grid = qs('mainGrid');
+    grid.innerHTML = `<div class="error-box">⚠️ ${msg}</div>`;
+  }
+
+  function parseVal(val) {
+    if (val === undefined || val === null || val === "") return 0;
+    let n = parseFloat(String(val).replace(',', '.'));
+    return isNaN(n) ? 0 : n;
+  }
+
+  function updateDashboard() {
+    const staffVal = qs('staffSelect').value;
+    const monthVal = qs('monthSelect').value;
+    
+    console.log(`🔍 Filtrage: staff=${staffVal}, month=${monthVal}`);
+    
+    let filtered = rawData;
+    
+    // Filtrer par mois
+    if (monthVal) {
+      filtered = filtered.filter(d => d.month === monthVal);
+    }
+    
+    console.log(`📊 Après filtre mois: ${filtered.length} enregistrements`);
+    
+    let finalData = [];
+    let stats = {};
+    
+    if (staffVal === 'all') {
+      // Moyenne par date
+      const dates = [...new Set(filtered.map(d => d.date))].sort();
+      finalData = dates.map(date => {
+        const tests = filtered.filter(d => d.date === date);
+        const avg = (k) => tests.reduce((a, c) => a + parseVal(c[k]), 0) / tests.length;
+        return { 
+          date, 
+          note: avg('note'), 
+          poids: avg('poids'), 
+          tempsSec: avg('tempsSec'), 
+          longueur: avg('longueur'), 
+          largeur: avg('largeur'), 
+          epaisseur: avg('epaisseur') 
+        };
+      });
+      
+      const avgNote = finalData.length ? (finalData.reduce((a, c) => a + parseVal(c.note), 0) / finalData.length) : 0;
+      stats = {
+        tests: filtered.length,
+        avgNote: avgNote.toFixed(2),
+        staffCount: [...new Set(filtered.map(d => d.staff))].length
+      };
+    } else {
+      // Données individuelles pour un équipier
+      finalData = filtered.filter(d => d.staff === staffVal).sort((a, b) => new Date(a.date) - new Date(b.date));
+      
+      const notes = finalData.map(d => parseVal(d.note));
+      stats = {
+        tests: finalData.length,
+        avgNote: notes.length ? (notes.reduce((a, c) => a + c, 0) / notes.length).toFixed(2) : 0,
+        maxNote: notes.length ? Math.max(...notes) : 0,
+        minNote: notes.length ? Math.min(...notes) : 0
+      };
+    }
+
+    console.log(`📈 Données finales: ${finalData.length} points, stats:`, stats);
+    
+    displayStats(stats, staffVal, monthVal);
+    chartConfigs.forEach(c => renderChart(c.id, c.key, c.label, finalData, staffVal === 'all'));
+  }
+
+  function displayStats(stats, staffVal, monthVal) {
+    const box = qs('statsBar');
+    const staffText = staffVal === 'all' ? 'Tous les équipiers' : staffVal;
+    const monthText = monthVal ? monthVal : 'Tous les mois';
+    
+    let html = `
+      <div class="info-box">
+         ${staffText} • ${monthText}
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Tests</div>
+        <div class="stat-value">${stats.tests}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Score Moyen</div>
+        <div class="stat-value">${stats.avgNote}/10</div>
+      </div>
+    `;
+    
+    if (stats.maxNote) {
+      html += `
+        <div class="stat-card">
+          <div class="stat-label">Meilleur</div>
+          <div class="stat-value">${stats.maxNote}/10</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Moins bon</div>
+          <div class="stat-value">${stats.minNote}/10</div>
+        </div>
+      `;
+    }
+    
+    if (stats.staffCount) {
+      html += `
+        <div class="stat-card">
+          <div class="stat-label">Équipiers</div>
+          <div class="stat-value">${stats.staffCount}</div>
+        </div>
+      `;
+    }
+    
+    box.innerHTML = html;
+  }
+
+  function renderChart(id, key, label, data, isGlobal) {
+    const ctx = qs(id);
+    if (!ctx) {
+      console.warn(`⚠️ Canvas ${id} non trouvé`);
+      return;
+    }
+    
+    const canvasCtx = ctx.getContext('2d');
+    if (activeCharts[id]) activeCharts[id].destroy();
+    
+    if (!data.length) {
+      console.warn(`⚠️ Pas de données pour ${id}`);
+      canvasCtx.fillStyle = '#999';
+      canvasCtx.font = '16px sans-serif';
+      canvasCtx.textAlign = 'center';
+      canvasCtx.fillText('Pas de données', ctx.width / 2, ctx.height / 2);
+      return;
+    }
+    
+    const values = data.map(d => parseVal(d[key]));
+    const avgValue = values.length ? (values.reduce((a, c) => a + c, 0) / values.length).toFixed(1) : 0;
+
+    activeCharts[id] = new Chart(canvasCtx, {
+      type: 'line',
+      data: {
+        labels: data.map(d => d.date),
+        datasets: [{
+          label: `${label} (moy: ${avgValue})`,
+          data: values,
+          borderColor: isGlobal ? '#185fa5' : '#f08a00',
+          backgroundColor: isGlobal ? 'rgba(24, 95, 165, 0.1)' : 'rgba(240, 138, 0, 0.1)',
+          borderWidth: 3, 
+          tension: 0.3, 
+          fill: true, 
+          pointRadius: 4,
+          pointBackgroundColor: isGlobal ? '#185fa5' : '#f08a00'
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: true,
+            labels: { usePointStyle: true }
+          }
+        },
+        scales: { 
+          y: { 
+            beginAtZero: false,
+            grid: { color: '#f0f0f0' },
+            ticks: { font: { weight: 'bold' } }
+          },
+          x: {
+            grid: { display: false },
+            ticks: {
+              callback: function(value, index, arr) {
+                // Afficher que certaines dates pour ne pas surcharger
+                const step = Math.ceil(arr.length / 5);
+                if (index % step === 0) {
+                  const date = new Date(data[index].date);
+                  return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
+                }
+                return '';
+              },
+              maxRotation: 0,
+              minRotation: 0
+            }
+          }
+        }
+      }
+    });
+  }
+
+  function resetFilters() {
+    console.log("🔄 Réinitialisation des filtres");
+    qs('staffSelect').value = 'all';
+    qs('monthSelect').value = getCurrentMonth();
+    updateDashboard();
+  }
+  
+  // Lancer au chargement
+  init();
+</script>
+</body>
+</html>
